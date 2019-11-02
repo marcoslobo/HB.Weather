@@ -1,0 +1,72 @@
+version: "3.1"
+
+volumes:
+  postgres-data: {}
+services:
+  hb-weather-worker:
+    container_name: hb-weather-worker
+    image: hb-weather-worker
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: ./src/Services/HB.Weather.Worker/Dockerfile
+    networks:
+      - hb-network
+    depends_on:
+      - "hb-weather-api"
+      - "hb-broker"
+    env_file:
+      - hb-weather-worker.env
+  hb-weather-api:
+    container_name: hb-weather-api
+    image: hb-weather-api
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: ./src/Services/HB.Weather.Api/Dockerfile
+    ports:
+      - "8080:80"
+    networks:
+      - hb-network
+    depends_on:
+      - "hb-db"
+      - "hb-broker"
+    env_file:
+      - hb-weather-api.env
+  hb-db:
+    container_name: hb-db
+    restart: always
+    image: postgres:11-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: hb_weather_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - hb-network
+  hb-broker:
+    container_name: hb-rabbit
+    hostname: "rabbithq"
+    image: "rabbitmq:3-management"
+    environment:
+      RABBITMQ_ERLANG_COOKIE: "SWQOKODSQALRPCLNMEQG"
+      RABBITMQ_DEFAULT_USER: "rabbitmq"
+      RABBITMQ_DEFAULT_PASS: "rabbitmq"
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    labels:
+      NAME: "rabbithb"
+    networks:
+      - hb-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:15672"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+networks:
+  hb-network:
+    driver: bridge
